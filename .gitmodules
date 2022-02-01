@@ -1,3 +1,0 @@
-[submodule "openvslam_bridge/3rd/openvslam"]
-	path = openvslam_bridge/3rd/openvslam
-	url = https://github.com/MapIV/openvslam.git
