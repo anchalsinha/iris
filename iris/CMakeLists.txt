@@ -80,16 +80,37 @@ set(G2O_LIBS
 message(STATUS "g2o version:\n\t${g2o_VERSION}")
 
 # == Catkin ==
-find_package(catkin REQUIRED COMPONENTS cv_bridge image_transport tf nav_msgs)
-catkin_package(CATKIN_DEPENDS cv_bridge image_transport tf nav_msgs)
+find_package(rclcpp REQUIRED)
+find_package(ament_cmake REQUIRED)
+find_package(cv_bridge REQUIRED)
+find_package(image_transport REQUIRED)
+find_package(tf REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+
+set(DEPS
+  rclcpp
+  cv_bridge
+  image_transport
+  tf
+  sensor_msgs
+  std_msgs
+  geometry_msgs
+  visualization_msgs
+  nav_msgs)
+
 
 # == Headers and sources ==
-include_directories(SYSTEM ${catkin_INCLUDE_DIRS})
 include_directories(${CMAKE_CURRENT_LIST_DIR}/src)
 file(GLOB SOURCES src/**/*.cpp)
 message(STATUS "${SOURCES}")
 
 # == Executable ==
 add_executable(iris_node src/iris_node.cpp ${SOURCES})
-target_link_libraries(iris_node ${catkin_LIBRARIES} ${OpenCV_LIBS} ${G2O_LIBS}
+target_link_libraries(iris_node ${OpenCV_LIBS} ${G2O_LIBS}
                       ${PCL_LIBRARIES} ${YAML_CPP_LIBRARIES})
+
+ament_target_dependencies(iris_node ${DEPS})

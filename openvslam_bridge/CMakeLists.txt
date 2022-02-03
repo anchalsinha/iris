@@ -61,27 +61,31 @@ find_package(Eigen3 REQUIRED)
 include_directories(SYSTEM ${EIGEN3_INCLUDE_DIR})
 message(STATUS "Eigen3 version:\n\t${EIGEN3_VERSION_STRING}")
 
-# == Catkin ==
-find_package(catkin REQUIRED COMPONENTS cv_bridge image_transport tf)
-catkin_package(CATKIN_DEPENDS cv_bridge image_transport tf)
+find_package(rclcpp REQUIRED)
+find_package(ament_cmake REQUIRED)
+find_package(cv_bridge REQUIRED)
+find_package(image_transport REQUIRED)
+find_package(tf REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
 
-# == Openvslam ==
-set(BUILD_EXAMPLES OFF) # disable building examples
-set(USE_PANGOLIN_VIEWER OFF) # disbale buidling viewer
-add_subdirectory(3rd/openvslam)
+set(DEPS
+  rclcpp
+  cv_bridge
+  image_transport
+  tf
+  sensor_msgs
+  std_msgs
+  geometry_msgs
+  visualization_msgs)
 
 # == Headers and sources ==
-include_directories(${CMAKE_CURRENT_LIST_DIR}/src)
-# cmake-format: off
-include_directories(
-  SYSTEM ${catkin_INCLUDE_DIRS}
-  ${CMAKE_CURRENT_LIST_DIR}/3rd/openvslam/src 
-  ${CMAKE_CURRENT_LIST_DIR}/3rd/spdlog/include)
-# cmake-format: on
+include_directories(${CMAKE_CURRENT_LIST_DIR}/include)
 
 # == Executable ==
 add_executable(openvslam_bridge_node src/bridge_node.cpp src/bridge.cpp)
-target_link_libraries(openvslam_bridge_node ${catkin_LIBRARIES} ${OpenCV_LIBS} openvslam)
+target_link_libraries(openvslam_bridge_node ${OpenCV_LIBS} openvslam)
 
-add_executable(openvslam_stereo_bridge_node src/stereo_bridge_node.cpp src/bridge.cpp src/stereo_bridge.cpp)
-target_link_libraries(openvslam_stereo_bridge_node ${catkin_LIBRARIES} ${OpenCV_LIBS} openvslam)
+ament_target_dependencies(openvslam_bridge_node ${DEPS})

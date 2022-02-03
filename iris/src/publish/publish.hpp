@@ -34,22 +34,25 @@ namespace iris
 {
 void publishImage(image_transport::Publisher& publisher, const cv::Mat& image);
 
-void publishPose(const Eigen::Matrix4f& T, const std::string& child_frame_id);
-void publishPointcloud(ros::Publisher& publisher, const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud);
-void publishPath(ros::Publisher& publisher, const std::vector<Eigen::Vector3f, Eigen::aligned_allocator<Eigen::Vector3f>>& path);
-void publishCorrespondences(ros::Publisher& publisher,
+void publishPose(const Eigen::Matrix4f& T, const std::string& child_frame_id, const rclcpp::Time& stamp);
+void publishPointcloud(rclcpp::Publisher& publisher, const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const rclcpp::Time& stamp);
+void publishPath(rclcpp::Publisher& publisher, const std::vector<Eigen::Vector3f, Eigen::aligned_allocator<Eigen::Vector3f>>& path, const rclcpp::Time& stamp);
+void publishCorrespondences(rclcpp::Publisher& publisher,
     const pcl::PointCloud<pcl::PointXYZ>::Ptr& source,
     const pcl::PointCloud<pcl::PointXYZ>::Ptr& target,
-    const pcl::CorrespondencesPtr& correspondences);
-void publishNormal(ros::Publisher& publisher,
+    const pcl::CorrespondencesPtr& correspondences,
+    const rclcpp::Time& stamp);
+void publishNormal(rclcpp::Publisher& publisher,
     const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud,
-    const pcl::PointCloud<pcl::Normal>::Ptr& normals);
-void publishCovariance(ros::Publisher& publisher,
+    const pcl::PointCloud<pcl::Normal>::Ptr& normals,
+    const rclcpp::Time& stamp);
+void publishCovariance(rclcpp::Publisher& publisher,
     const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud,
-    const pcl::PointCloud<pcl::Normal>::Ptr& normals);
+    const pcl::PointCloud<pcl::Normal>::Ptr& normals,
+    const rclcpp::Time& stamp);
 
-void publishResetPointcloud(ros::Publisher& publisher);
-void publishResetCorrespondences(ros::Publisher& publisher);
+void publishResetPointcloud(rclcpp::Publisher& publisher, const rclcpp::Time& stamp);
+void publishResetCorrespondences(rclcpp::Publisher& publisher, const rclcpp::Time& stamp);
 
 std::function<void(const sensor_msgs::ImageConstPtr&)> imageCallbackGenerator(cv::Mat& subscribed_image);
 std::function<void(const sensor_msgs::CompressedImageConstPtr&)> compressedImageCallbackGenerator(cv::Mat& subscribed_image);

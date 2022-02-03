@@ -30,32 +30,38 @@
 #include <iostream>
 #include <pcl/correspondence.h>
 #include <pcl_ros/point_cloud.h>
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.h>
 #include <tf/transform_broadcaster.h>
 
-void publishPose(const Eigen::Matrix4f& T, const std::string& child_frame_id)
+void publishPose(const Eigen::Matrix4f& T, const std::string& child_frame_id, const rclcpp::Time& stamp)
 {
   static tf::TransformBroadcaster br;
   tf::Transform transform;
   transform.setFromOpenGLMatrix(T.cast<double>().eval().data());
-  br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "world", child_frame_id));
+  br.sendTransform(tf::StampedTransform(transform, stamp, "world", child_frame_id));
 }
 
 int main(int argc, char* argv[])
 {
-  ros::init(argc, argv, "openvslam_bridge_node");
+  rclcpp::init(argc, argv);
+  
+  auto node = std::make_shared<rclcpp::Node>("openvslam_bridge_node");
+  node->declare_parameter("vocab_path", "");
+  node->declare_parameter("vslam_config_path", "");
+  node->declare_parameter("image_topic_name0", "");
+  node->declare_parameter("is_image_compressed", false);
+  node->declare_parameter("keyframe_recollection", 0);
 
   // Get rosparams
-  ros::NodeHandle pnh("~");
   bool is_image_compressed;
   int recollection = 30;
   std::string vocab_path, vslam_config_path, image_topic_name;
-  pnh.getParam("vocab_path", vocab_path);
-  pnh.getParam("vslam_config_path", vslam_config_path);
-  pnh.getParam("image_topic_name0", image_topic_name);
-  pnh.getParam("is_image_compressed", is_image_compressed);
-  pnh.getParam("keyframe_recollection", recollection);
-  ROS_INFO("vocab_path: %s, vslam_config_path: %s, image_topic_name: %s, is_image_compressed: %d",
+  node->get_parameter("vocab_path", vocab_path);
+  node->get_parameter("vslam_config_path", vslam_config_path);
+  node->get_parameter("image_topic_name0", image_topic_name);
+  node->get_parameter("is_image_compressed", is_image_compressed);
+  node->get_parameter("keyframe_recollection", recollection);
+  RCLCPP_INFO(node->get_logger(), "vocab_path: %s, vslam_config_path: %s, image_topic_name: %s, is_image_compressed: %d",
       vocab_path.c_str(), vslam_config_path.c_str(), image_topic_name.c_str(), is_image_compressed);
 
 
@@ -63,9 +69,8 @@ int main(int argc, char* argv[])
   const int upper_threshold_of_points = 2000;
 
   // Setup subscriber
-  ros::NodeHandle nh;
-  image_transport::ImageTransport it(nh);
-  ros::Time subscribed_stamp;
+  image_transport::ImageTransport it(node);
+  rclcpp::Time subscribed_stamp;
   cv::Mat subscribed_image;
   image_transport::TransportHints hints("raw");
   if (is_image_compressed) hints = image_transport::TransportHints("compressed");
@@ -78,10 +83,10 @@ int main(int argc, char* argv[])
   };
 
 
-  image_transport::Subscriber image_subscriber = it.subscribe(image_topic_name, 5, callback, ros::VoidPtr(), hints);
+  image_transport::Subscriber image_subscriber = it.subscribe(image_topic_name, 5, callback, rclcpp::VoidPtr(), hints);
 
   // Setup publisher
-  ros::Publisher vslam_publisher = nh.advertise<pcl::PointCloud<pcl::PointXYZINormal>>("iris/vslam_data", 1);
+  auto vslam_publisher = node->create_publisher<pcl::PointCloud<pcl::PointXYZINormal>>("iris/vslam_data", 1);
   image_transport::Publisher image_publisher = it.advertise("iris/processed_image", 5);
 
   // Setup for OpenVSLAM
@@ -89,17 +94,17 @@ int main(int argc, char* argv[])
   bridge.setup(vslam_config_path, vocab_path);
 
   std::chrono::system_clock::time_point m_start;
-  ros::Rate loop_rate(20);
+  rclcpp::Rate loop_rate(20);
   float accuracy = 0.5f;
   pcl::PointCloud<pcl::PointXYZINormal>::Ptr vslam_data(new pcl::PointCloud<pcl::PointXYZINormal>);
   std::ofstream ofs_time("vslam_time.csv");
 
   // Start main loop
-  ROS_INFO("start main loop.");
-  while (ros::ok()) {
+  RCLCPP_INFO(node->get_logger(), "start main loop.");
+  while (rclcpp::ok()) {
     if (!subscribed_image.empty()) {
       m_start = std::chrono::system_clock::now();  // start timer
-      ros::Time process_stamp = subscribed_stamp;
+      rclcpp::Time process_stamp = subscribed_stamp;
 
       // process OpenVSLAM
       bridge.execute(subscribed_image);
@@ -114,7 +119,7 @@ int main(int argc, char* argv[])
       if (vslam_data->size() > upper_threshold_of_points && accuracy < 0.90) accuracy += 0.01f;
       std::cout << "accuracy: " << accuracy << std::endl;
       {
-        sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", bridge.getFrame()).toImageMsg();
+        sensor_msgs::msg::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", bridge.getFrame()).toImageMsg();
         image_publisher.publish(msg);
       }
       {
@@ -130,15 +135,15 @@ int main(int argc, char* argv[])
          << time_ms
          << "\033[m ms";
       ofs_time << time_ms << std::endl;
-      ROS_INFO("%s", ss.str().c_str());
+      RCLCPP_INFO(node->get_logger(), "%s", ss.str().c_str());
     }
-    publishPose(bridge.getCameraPose().inverse(), "iris/vslam_pose");
+    publishPose(bridge.getCameraPose().inverse(), "iris/vslam_pose", node->get_clock().now());
 
     // Spin and wait
     loop_rate.sleep();
-    ros::spinOnce();
+    rclcpp::spin_once();
   }
 
-  ROS_INFO("Finalize openvslam_bridge::bridge_node");
+  RCLCPP_INFO(node->get_logger(), "Finalize openvslam_bridge::bridge_node");
   return 0;
 }

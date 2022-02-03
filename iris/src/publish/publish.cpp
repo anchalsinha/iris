@@ -49,20 +49,20 @@ Eigen::Vector3f convertRGB(Eigen::Vector3f hsv)
   return {1.0f, 1.0f, 1.0f};
 }
 
-void publishPose(const Eigen::Matrix4f& T, const std::string& child_frame_id)
+void publishPose(const Eigen::Matrix4f& T, const std::string& child_frame_id, const rclcpp::Time& stamp)
 {
   static tf::TransformBroadcaster br;
 
 
   tf::Transform transform;
   transform.setFromOpenGLMatrix(util::normalizePose(T).cast<double>().eval().data());
-  br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "world", child_frame_id));
+  br.sendTransform(tf::StampedTransform(transform, stamp, "world", child_frame_id));
 }
 
-void publishPointcloud(ros::Publisher& publisher, const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
+void publishPointcloud(rclcpp::Publisher& publisher, const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const rclcpp::Time& stamp)
 {
   auto tmp = cloud;
-  pcl_conversions::toPCL(ros::Time::now(), tmp->header.stamp);
+  pcl_conversions::toPCL(stamp, tmp->header.stamp);
   tmp->header.frame_id = "world";
   publisher.publish(tmp);
 }
@@ -73,14 +73,15 @@ void publishImage(image_transport::Publisher& publisher, const cv::Mat& image)
   publisher.publish(msg);
 }
 
-void publishCorrespondences(ros::Publisher& publisher,
+void publishCorrespondences(rclcpp::Publisher& publisher,
     const pcl::PointCloud<pcl::PointXYZ>::Ptr& source,
     const pcl::PointCloud<pcl::PointXYZ>::Ptr& target,
-    const pcl::CorrespondencesPtr& correspondences)
+    const pcl::CorrespondencesPtr& correspondences,
+    const rclcpp::Time& stamp)
 {
   visualization_msgs::Marker line_strip;
   line_strip.header.frame_id = "world";
-  line_strip.header.stamp = ros::Time::now();
+  line_strip.header.stamp = stamp;
   line_strip.ns = "correspondences";
   line_strip.action = visualization_msgs::Marker::ADD;
   line_strip.pose.orientation.w = 1.0;
@@ -109,9 +110,10 @@ void publishCorrespondences(ros::Publisher& publisher,
   publisher.publish(line_strip);
 }
 
-void publishNormal(ros::Publisher& publisher,
+void publishNormal(rclcpp::Publisher& publisher,
     const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud,
-    const pcl::PointCloud<pcl::Normal>::Ptr& normals)
+    const pcl::PointCloud<pcl::Normal>::Ptr& normals,
+    const rclcpp::Time& stamp)
 {
   visualization_msgs::MarkerArray marker_array;
 
@@ -127,7 +129,7 @@ void publishNormal(ros::Publisher& publisher,
     pcl::Normal n = normals->at(id);
 
     marker.header.frame_id = "world";
-    marker.header.stamp = ros::Time::now();
+    marker.header.stamp = stamp;
     marker.ns = "normal";
     marker.action = visualization_msgs::Marker::ADD;
     marker.pose.orientation.w = 1.0;
@@ -159,9 +161,10 @@ Eigen::Quaternionf normalToQuaternion(const Eigen::Vector3f& n)
   return Eigen::Quaternionf::FromTwoVectors(Eigen::Vector3f(0, 0, 1), n);
 }
 
-void publishCovariance(ros::Publisher& publisher,
+void publishCovariance(rclcpp::Publisher& publisher,
     const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud,
-    const pcl::PointCloud<pcl::Normal>::Ptr& normals)
+    const pcl::PointCloud<pcl::Normal>::Ptr& normals,
+    const rclcpp::Time& stamp)
 {
   visualization_msgs::MarkerArray marker_array;
 
@@ -173,7 +176,7 @@ void publishCovariance(ros::Publisher& publisher,
   for (size_t id = 0; id < cloud->size(); id++) {
     visualization_msgs::Marker marker;
     marker.header.frame_id = "world";
-    marker.header.stamp = ros::Time::now();
+    marker.header.stamp = stamp;
     marker.ns = "covariance";
     marker.action = visualization_msgs::Marker::ADD;
 
@@ -202,11 +205,11 @@ void publishCovariance(ros::Publisher& publisher,
   publisher.publish(marker_array);
 }
 
-visualization_msgs::Marker makeMarkerAsLine(const Eigen::Vector3f& s, const Eigen::Vector3f& e, int id)
+visualization_msgs::Marker makeMarkerAsLine(const Eigen::Vector3f& s, const Eigen::Vector3f& e, int id, const rclcpp::Time& stamp)
 {
   visualization_msgs::Marker line_strip;
   line_strip.header.frame_id = "world";
-  line_strip.header.stamp = ros::Time::now();
+  line_strip.header.stamp = stamp;
   line_strip.ns = "points_and_lines";
   line_strip.action = visualization_msgs::Marker::ADD;
   line_strip.pose.orientation.w = 1.0;
@@ -232,12 +235,12 @@ visualization_msgs::Marker makeMarkerAsLine(const Eigen::Vector3f& s, const Eige
   return line_strip;
 }
 
-void publishPath(ros::Publisher& publisher, const std::vector<Eigen::Vector3f, Eigen::aligned_allocator<Eigen::Vector3f>>& trajectory)
+void publishPath(rclcpp::Publisher& publisher, const std::vector<Eigen::Vector3f, Eigen::aligned_allocator<Eigen::Vector3f>>& trajectory, const rclcpp::Time& stamp)
 {
   nav_msgs::Path path;
 
   path.header.frame_id = "world";
-  path.header.stamp = ros::Time::now();
+  path.header.stamp = stamp;
   for (const Eigen::Vector3f& t : trajectory) {
     geometry_msgs::PoseStamped pose_stamped;
     pose_stamped.pose.position.x = t.x();
@@ -270,19 +273,19 @@ std::function<void(const sensor_msgs::CompressedImageConstPtr&)> compressedImage
 }
 
 
-void publishResetPointcloud(ros::Publisher& publisher)
+void publishResetPointcloud(rclcpp::Publisher& publisher, const rclcpp::Time& stamp)
 {
   pcl::PointCloud<pcl::PointXYZ>::Ptr tmp(new pcl::PointCloud<pcl::PointXYZ>);
-  pcl_conversions::toPCL(ros::Time::now(), tmp->header.stamp);
+  pcl_conversions::toPCL(stamp, tmp->header.stamp);
   tmp->header.frame_id = "world";
   publisher.publish(tmp);
 }
 
-void publishResetCorrespondences(ros::Publisher& publisher)
+void publishResetCorrespondences(rclcpp::Publisher& publisher, const rclcpp::Time& stamp)
 {
   visualization_msgs::Marker line_strip;
   line_strip.header.frame_id = "world";
-  line_strip.header.stamp = ros::Time::now();
+  line_strip.header.stamp = stamp;
   line_strip.ns = "correspondences";
   line_strip.action = visualization_msgs::Marker::ADD;
   line_strip.pose.orientation.w = 1.0;

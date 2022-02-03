@@ -9,21 +9,13 @@
 
     <buildtool_depend>catkin</buildtool_depend>
 
-    <build_depend>image_transport</build_depend>
-    <build_depend>cv_bridge</build_depend>
-    <build_depend>sensor_msgs</build_depend>
-    <build_depend>geometry_msgs</build_depend>
-    <build_depend>visualization_msgs</build_depend>
-    <build_depend>nav_msgs</build_depend>
-    <build_depend>tf</build_depend>
-
-    <build_export_depend>image_transport</build_export_depend>
-    <build_export_depend>cv_bridge</build_export_depend>
-    <build_export_depend>sensor_msgs</build_export_depend>
-    <build_export_depend>geometry_msgs</build_export_depend>
-    <build_export_depend>visualization_msgs</build_export_depend>
-    <build_export_depend>nav_msgs</build_export_depend>
-    <build_export_depend>tf</build_export_depend>
+    <depend>image_transport</depend>
+    <depend>cv_bridge</depend>
+    <depend>sensor_msgs</depend>
+    <depend>geometry_msgs</depend>
+    <depend>visualization_msgs</depend>
+    <depend>nav_msgs</depend>
+    <depend>tf</depend>
 
     <exec_depend>image_transport</exec_depend>
     <exec_depend>cv_bridge</exec_depend>
@@ -32,4 +24,9 @@
     <exec_depend>visualization_msgs</exec_depend>
     <exec_depend>nav_msgs</exec_depend>
     <exec_depend>tf</exec_depend>
+
+    <export>
+        <build_type>ament_cmake</build_type>
+    </export>
+
 </package>
