@@ -25,7 +25,7 @@ message("Build Type:\n\t${CMAKE_BUILD_TYPE}")
 # == Clear "CMAKE_CXX_FLAGS" ==
 set(CMAKE_CXX_FLAGS "")
 set(CMAKE_CXX_FLAGS
-    "${CMAKE_CXX_FLAGS} -pipe -fopenmp -Ofast -lstdc++fs -mfpmath=both -mtune=native"
+    "${CMAKE_CXX_FLAGS} -pipe -fopenmp -Ofast -lstdc++fs -mtune=native"
 )# -mtune=native
 
 # == Set warning flags ==
@@ -53,7 +53,7 @@ link_directories(${PCL_LIBRARY_DIRS})
 message(STATUS "PCL version:\n\t${PCL_VERSION}")
 
 # == OpenCV ==
-find_package(OpenCV 3.2 REQUIRED)
+find_package(OpenCV)
 message(STATUS "OpenCV version:\n\t${OpenCV_VERSION}")
 
 # == Eigen3 ==
@@ -84,7 +84,7 @@ find_package(rclcpp REQUIRED)
 find_package(ament_cmake REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(image_transport REQUIRED)
-find_package(tf REQUIRED)
+find_package(tf2_ros REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
@@ -95,12 +95,14 @@ set(DEPS
   rclcpp
   cv_bridge
   image_transport
-  tf
+  tf2_ros
   sensor_msgs
   std_msgs
   geometry_msgs
   visualization_msgs
-  nav_msgs)
+  nav_msgs
+  PCL
+)
 
 
 # == Headers and sources ==

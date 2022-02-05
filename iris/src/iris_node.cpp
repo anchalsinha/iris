@@ -29,72 +29,32 @@
 #include "system/system.hpp"
 #include <chrono>
 #include <fstream>
-#include <geometry_msgs/PoseWithCovarianceStamped.h>
-#include <image_transport/image_transport.h>
-#include <nav_msgs/Path.h>
-#include <pcl_ros/point_cloud.h>
-#include <rclcpp/rclcpp.h>
-#include <std_msgs/Float32.h>
-#include <tf/transform_broadcaster.h>
-#include <tf/transform_listener.h>
-#include <visualization_msgs/Marker.h>
-#include <visualization_msgs/MarkerArray.h>
+#include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
+#include <image_transport/image_transport.hpp>
+#include <nav_msgs/msg/path.hpp>
+#include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/float32.hpp>
+#include <tf2_ros/transform_broadcaster.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_ros/buffer.h>
+#include <visualization_msgs/msg/marker.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
 
+#include <pcl/point_types.h>
+#include <pcl/io/pcd_io.h>
+#include <pcl/common/common.h>
+#include <pcl/common/eigen.h>
 
 //
-Eigen::Matrix4f listenTransform(tf::TransformListener& listener);
+Eigen::Matrix4f listenTransform(tf2_ros::Buffer& buffer);
 
 //
 pcl::PointCloud<pcl::PointXYZINormal>::Ptr vslam_data(new pcl::PointCloud<pcl::PointXYZINormal>);
 bool vslam_update = false;
-void callback(const pcl::PointCloud<pcl::PointXYZINormal>::ConstPtr& msg)
-{
-  *vslam_data = *msg;
-  if (vslam_data->size() > 0)
-    vslam_update = true;
-}
 
 //
 Eigen::Matrix4f T_recover = Eigen::Matrix4f::Zero();
 pcl::PointCloud<pcl::PointXYZ>::Ptr whole_pointcloud = nullptr;
-void callbackForRecover(const geometry_msgs::PoseWithCovarianceStampedConstPtr& msg)
-{
-  ROS_INFO("/initial_pose is subscribed");
-
-  float x = static_cast<float>(msg->pose.pose.position.x);
-  float y = static_cast<float>(msg->pose.pose.position.y);
-  float qw = static_cast<float>(msg->pose.pose.orientation.w);
-  float qz = static_cast<float>(msg->pose.pose.orientation.z);
-
-  float z = std::numeric_limits<float>::max();
-
-  if (whole_pointcloud == nullptr) {
-    std::cout << "z=0 because whole_pointcloud is nullptr" << std::endl;
-    z = 0;
-  } else {
-    for (const pcl::PointXYZ& p : *whole_pointcloud) {
-      constexpr float r2 = 5 * 5;  // [m^2]
-      float dx = x - p.x;
-      float dy = y - p.y;
-      if (dx * dx + dy * dy < r2) {
-        z = std::min(z, p.z);
-      }
-    }
-  }
-
-  T_recover.setIdentity();
-  T_recover(0, 3) = x;
-  T_recover(1, 3) = y;
-  T_recover(2, 3) = z;
-  float theta = 2 * std::atan2(qz, qw);
-  Eigen::Matrix3f R;
-  R << 0, 0, 1,
-      -1, 0, 0,
-      0, -1, 0;
-  T_recover.topLeftCorner(3, 3) = Eigen::AngleAxisf(theta, Eigen::Vector3f::UnitZ()).toRotationMatrix() * R;
-  std::cout << "T_recover:\n"
-            << T_recover << std::endl;
-}
 
 void writeCsv(std::ofstream& ofs, const rclcpp::Time& timestamp, const Eigen::Matrix4f& iris_pose)
 {
@@ -104,7 +64,7 @@ void writeCsv(std::ofstream& ofs, const rclcpp::Time& timestamp, const Eigen::Ma
   };
 
   ofs << std::fixed << std::setprecision(std::numeric_limits<double>::max_digits10);
-  ofs << timestamp.toSec() << " " << convert(iris_pose).transpose() << std::endl;
+  ofs << timestamp.seconds() << " " << convert(iris_pose).transpose() << std::endl;
 }
 
 int main(int argc, char* argv[])
@@ -114,15 +74,61 @@ int main(int argc, char* argv[])
   node->declare_parameter("iris_config_path", "");
   node->declare_parameter("pcd_path", "");
 
+  auto tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(*node);
+
   // Setup subscriber
-  auto vslam_subscriber = node->create_subscription<pcl::PointCloud<pcl::PointXYZINormal>>("iris/vslam_data", 5, callback);
-  auto recover_pose_subscriber = node->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>("/initialpose", 5, callbackForRecover);
-  tf::TransformListener listener;
+  auto vslam_subscriber = node->create_subscription<pcl::PointCloud<pcl::PointXYZINormal>::Ptr>("iris/vslam_data", 5,
+    [](std::shared_ptr<pcl::PointCloud<pcl::PointXYZINormal>> msg) {
+      *vslam_data = *msg;
+      if (vslam_data->size() > 0)
+        vslam_update = true;
+    }
+  );
+  auto recover_pose_subscriber = node->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr>("/initialpose", 5, 
+    [](geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg) {
+      float x = static_cast<float>(msg->pose.pose.position.x);
+      float y = static_cast<float>(msg->pose.pose.position.y);
+      float qw = static_cast<float>(msg->pose.pose.orientation.w);
+      float qz = static_cast<float>(msg->pose.pose.orientation.z);
+
+      float z = std::numeric_limits<float>::max();
+
+      if (whole_pointcloud == nullptr) {
+        std::cout << "z=0 because whole_pointcloud is nullptr" << std::endl;
+        z = 0;
+      } else {
+        for (const pcl::PointXYZ& p : *whole_pointcloud) {
+          constexpr float r2 = 5 * 5;  // [m^2]
+          float dx = x - p.x;
+          float dy = y - p.y;
+          if (dx * dx + dy * dy < r2) {
+            z = std::min(z, p.z);
+          }
+        }
+      }
+
+      T_recover.setIdentity();
+      T_recover(0, 3) = x;
+      T_recover(1, 3) = y;
+      T_recover(2, 3) = z;
+      float theta = 2 * std::atan2(qz, qw);
+      Eigen::Matrix3f R;
+      R << 0, 0, 1,
+          -1, 0, 0,
+          0, -1, 0;
+      T_recover.topLeftCorner(3, 3) = Eigen::AngleAxisf(theta, Eigen::Vector3f::UnitZ()).toRotationMatrix() * R;
+      std::cout << "T_recover:\n"
+                << T_recover << std::endl;
+    }
+  );
+
+  auto buffer = std::make_unique<tf2_ros::Buffer>(node->get_clock());
+  auto listener = std::make_shared<tf2_ros::TransformListener>(*buffer);
 
   // Setup publisher
-  auto target_pc_publisher = node->create_publisher<pcl::PointCloud<pcl::PointXYZI>>("iris/target_pointcloud", 1, true);
-  auto whole_pc_publisher = node->create_publisher<pcl::PointCloud<pcl::PointXYZI>>("iris/whole_pointcloud", 1, true);
-  auto source_pc_publisher = node->create_publisher<pcl::PointCloud<pcl::PointXYZI>>("iris/source_pointcloud", 1);
+  auto target_pc_publisher = node->create_publisher<pcl::PointCloud<pcl::PointXYZI>::Ptr>("iris/target_pointcloud", 1);
+  auto whole_pc_publisher = node->create_publisher<pcl::PointCloud<pcl::PointXYZI>::Ptr>("iris/whole_pointcloud", 1);
+  auto source_pc_publisher = node->create_publisher<pcl::PointCloud<pcl::PointXYZI>::Ptr>("iris/source_pointcloud", 1);
   auto iris_path_publisher = node->create_publisher<nav_msgs::msg::Path>("iris/iris_path", 1);
   auto vslam_path_publisher = node->create_publisher<nav_msgs::msg::Path>("iris/vslam_path", 1);
   auto correspondences_publisher = node->create_publisher<visualization_msgs::msg::Marker>("iris/correspondences", 1);
@@ -154,8 +160,8 @@ int main(int argc, char* argv[])
   Eigen::Matrix4f iris_pose = config.T_init;
 
   // Publish map
-  iris::publishPointcloud(whole_pc_publisher, map->getSparseCloud(), node->get_clock().now());
-  iris::publishPointcloud(target_pc_publisher, map->getTargetCloud(), node->get_clock().now());
+  // iris::publishPointcloud(whole_pc_publisher, map->getSparseCloud(), node->get_clock()->now());
+  // iris::publishPointcloud(target_pc_publisher, map->getTargetCloud(), node->get_clock()->now());
   whole_pointcloud = map->getSparseCloud();
   std::ofstream ofs_track("trajectory.csv");
   std::ofstream ofs_time("iris_time.csv");
@@ -164,10 +170,10 @@ int main(int argc, char* argv[])
 
   // Start main loop
   rclcpp::Rate loop_rate(20);
-  ROS_INFO("start main loop.");
+  RCLCPP_INFO(node->get_logger(), "start main loop.");
   while (rclcpp::ok()) {
 
-    Eigen::Matrix4f T_vslam = listenTransform(listener);
+    Eigen::Matrix4f T_vslam = listenTransform(*buffer);
     if (!T_recover.isZero()) {
       std::cout << "apply recover pose" << std::endl;
       system->specifyTWorld(T_recover);
@@ -185,15 +191,15 @@ int main(int argc, char* argv[])
 
       // Publish for rviz
       system->popPublication(publication);
-      iris::publishPointcloud(source_pc_publisher, publication.cloud, node->get_clock().now());
-      iris::publishPath(iris_path_publisher, publication.iris_trajectory, node->get_clock().now());
-      iris::publishPath(vslam_path_publisher, publication.offset_trajectory, node->get_clock().now());
-      iris::publishCorrespondences(correspondences_publisher, publication.cloud, map->getTargetCloud(), publication.correspondences, node->get_clock().now());
-      // iris::publishNormal(normal_publisher, publication.cloud, publication.normals, node->get_clock().now());
-      // iris::publishCovariance(covariance_publisher, publication.cloud, publication.normals, node->get_clock().now());
+      // iris::publishPointcloud(source_pc_publisher, publication.cloud, node->get_clock()->now());
+      iris::publishPath(iris_path_publisher, publication.iris_trajectory, node->get_clock()->now());
+      iris::publishPath(vslam_path_publisher, publication.offset_trajectory, node->get_clock()->now());
+      iris::publishCorrespondences(correspondences_publisher, publication.cloud, map->getTargetCloud(), publication.correspondences, node->get_clock()->now());
+      // iris::publishNormal(normal_publisher, publication.cloud, publication.normals, node->get_clock()->now());
+      // iris::publishCovariance(covariance_publisher, publication.cloud, publication.normals, node->get_clock()->now());
 
       if (last_map_info != map->getLocalmapInfo()) {
-        iris::publishPointcloud(target_pc_publisher, map->getTargetCloud(), node->get_clock().now());
+        // iris::publishPointcloud(target_pc_publisher, map->getTargetCloud(), node->get_clock()->now());
       }
       last_map_info = map->getLocalmapInfo();
       std::cout << "map: " << last_map_info.toString() << std::endl;
@@ -206,15 +212,15 @@ int main(int argc, char* argv[])
          << time_ms
          << "\033[m ms";
       ofs_time << time_ms << std::endl;
-      ROS_INFO("Iris/ALIGN: %s", ss.str().c_str());
+      RCLCPP_INFO(node->get_logger(), "Iris/ALIGN: %s", ss.str().c_str());
       {
-        std_msgs::Float32 scale;
+        std_msgs::msg::Float32 scale;
         scale.data = iris::util::getScale(publication.T_align);
-        scale_publisher.publish(scale);
+        scale_publisher->publish(scale);
 
-        std_msgs::Float32 processing_time;
+        std_msgs::msg::Float32 processing_time;
         processing_time.data = static_cast<float>(time_ms);
-        processing_time_publisher.publish(processing_time);
+        processing_time_publisher->publish(processing_time);
       }
 
       offseted_vslam_pose = publication.offset_camera;
@@ -223,12 +229,12 @@ int main(int argc, char* argv[])
       writeCsv(ofs_track, process_stamp, iris_pose);
     }
 
-    iris::publishPose(offseted_vslam_pose, "iris/offseted_vslam_pose", node->get_clock().now());
-    iris::publishPose(iris_pose, "iris/iris_pose", node->get_clock().now());
+    iris::publishPose(offseted_vslam_pose, "iris/offseted_vslam_pose", *tf_broadcaster_, node->get_clock()->now());
+    iris::publishPose(iris_pose, "iris/iris_pose", *tf_broadcaster_, node->get_clock()->now());
 
 
     // Spin and wait
-    rclcpp::spin_once();
+    rclcpp::spin_some(node);
     loop_rate.sleep();
   }
 
@@ -237,13 +243,16 @@ int main(int argc, char* argv[])
 }
 
 
-Eigen::Matrix4f listenTransform(tf::TransformListener& listener)
+Eigen::Matrix4f listenTransform(tf2_ros::Buffer& buffer)
 {
-  tf::StampedTransform transform;
+  geometry_msgs::msg::TransformStamped transformStampedMsg;
   try {
-    listener.lookupTransform("world", "iris/vslam_pose", rclcpp::Time(0), transform);
+    transformStampedMsg = buffer.lookupTransform("world", "iris/vslam_pose", tf2::TimePointZero);
   } catch (...) {
   }
+
+  tf2::Stamped<tf2::Transform> transform;
+  tf2::fromMsg(transformStampedMsg, transform);
 
   double data[16];
   transform.getOpenGLMatrix(data);

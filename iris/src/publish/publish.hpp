@@ -24,37 +24,48 @@
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
+
+#include <rclcpp/rclcpp.hpp>
 #include <cv_bridge/cv_bridge.h>
-#include <image_transport/image_transport.h>
+#include <pcl_conversions/pcl_conversions.h>
+#include <tf2_ros/transform_broadcaster.h>
+
+#include <nav_msgs/msg/path.hpp>
+#include <visualization_msgs/msg/marker.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
+
 #include <pcl/correspondence.h>
-#include <pcl_ros/point_cloud.h>
-#include <tf/transform_broadcaster.h>
+#include <pcl/point_types.h>
+#include <pcl/io/pcd_io.h>
+#include <pcl/common/common.h>
+#include <pcl/common/eigen.h>
 
 namespace iris
 {
-void publishImage(image_transport::Publisher& publisher, const cv::Mat& image);
+// void publishImage(image_transport::Publisher& publisher, const cv::Mat& image, rclcpp::Time stamp);
 
-void publishPose(const Eigen::Matrix4f& T, const std::string& child_frame_id, const rclcpp::Time& stamp);
-void publishPointcloud(rclcpp::Publisher& publisher, const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const rclcpp::Time& stamp);
-void publishPath(rclcpp::Publisher& publisher, const std::vector<Eigen::Vector3f, Eigen::aligned_allocator<Eigen::Vector3f>>& path, const rclcpp::Time& stamp);
-void publishCorrespondences(rclcpp::Publisher& publisher,
+void publishPose(const Eigen::Matrix4f& T, const std::string& child_frame_id, tf2_ros::TransformBroadcaster& tf_broadcaster, rclcpp::Time stamp);
+// void publishPointcloud(const rclcpp::Publisher<pcl::PointCloud<pcl::PointXYZI>::Ptr>::SharedPtr& publisher, const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, rclcpp::Time stamp);
+void publishPath(const rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr& publisher, const std::vector<Eigen::Vector3f, Eigen::aligned_allocator<Eigen::Vector3f>>& path, rclcpp::Time stamp);
+void publishCorrespondences(const rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr& publisher,
     const pcl::PointCloud<pcl::PointXYZ>::Ptr& source,
     const pcl::PointCloud<pcl::PointXYZ>::Ptr& target,
     const pcl::CorrespondencesPtr& correspondences,
-    const rclcpp::Time& stamp);
-void publishNormal(rclcpp::Publisher& publisher,
+    rclcpp::Time stamp);
+void publishNormal(const rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr& publisher,
     const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud,
     const pcl::PointCloud<pcl::Normal>::Ptr& normals,
-    const rclcpp::Time& stamp);
-void publishCovariance(rclcpp::Publisher& publisher,
+    rclcpp::Time stamp);
+void publishCovariance(const rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr& publisher,
     const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud,
     const pcl::PointCloud<pcl::Normal>::Ptr& normals,
-    const rclcpp::Time& stamp);
+    rclcpp::Time stamp);
 
-void publishResetPointcloud(rclcpp::Publisher& publisher, const rclcpp::Time& stamp);
-void publishResetCorrespondences(rclcpp::Publisher& publisher, const rclcpp::Time& stamp);
+// void publishResetPointcloud(const rclcpp::Publisher<pcl::PointCloud<pcl::PointXYZ>::Ptr>::SharedPtr& publisher, rclcpp::Time stamp);
+void publishResetCorrespondences(const rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr& publisher, rclcpp::Time stamp);
 
-std::function<void(const sensor_msgs::ImageConstPtr&)> imageCallbackGenerator(cv::Mat& subscribed_image);
-std::function<void(const sensor_msgs::CompressedImageConstPtr&)> compressedImageCallbackGenerator(cv::Mat& subscribed_image);
+std::function<void(const sensor_msgs::msg::Image::SharedPtr&)> imageCallbackGenerator(cv::Mat& subscribed_image);
+std::function<void(const sensor_msgs::msg::CompressedImage::SharedPtr&)> compressedImageCallbackGenerator(cv::Mat& subscribed_image);
 
 }  // namespace iris

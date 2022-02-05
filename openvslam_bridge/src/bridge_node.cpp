@@ -35,10 +35,10 @@
 
 void publishPose(const Eigen::Matrix4f& T, const std::string& child_frame_id, const rclcpp::Time& stamp)
 {
-  static tf::TransformBroadcaster br;
-  tf::Transform transform;
+  static tf2_ros::TransformBroadcaster br;
+  tf2_ros::Transform transform;
   transform.setFromOpenGLMatrix(T.cast<double>().eval().data());
-  br.sendTransform(tf::StampedTransform(transform, stamp, "world", child_frame_id));
+  br.sendTransform(tf2_ros::StampedTransform(transform, stamp, "world", child_frame_id));
 }
 
 int main(int argc, char* argv[])
